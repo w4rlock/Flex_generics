@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute">
+	<mx:Script>
+		<![CDATA[
+			import flash.utils.getDefinitionByName;
+			import flash.utils.getQualifiedClassName;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.Button;
+			import mx.controls.TextArea;
+			import mx.core.Container;
+			import mx.core.UIComponent;
+			import mx.logging.Log;
+			import mx.utils.ArrayUtil;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			import mx.utils.object_proxy;
+			
+			[Bindable] private var arr:Array =  [{txt: ""},{txt:"asdsad"},{txt:"zzz"},{txt:"xxx"}];
+			private function init():void{
+				
+			}
+			
+			private function instClazz(name:String):Class{
+				var clazz:Class = Class(getDefinitionByName(name));
+				return new clazz();
+			}
+			
+
+			private function getOb(ob:Object, key:String):Object{
+				var ind:Number=-1;
+				var inOb:Object;
+				var currKey:String;
+				if ((ind = key.indexOf("9")) > -1){
+					currKey = key.split("9")[0];
+					if (ob.hasOwnProperty(currKey) && (ob[currKey] == null)){
+						return ob[currKey] = instClazz(flash.utils.getQualifiedClassName(ob));
+					}
+				}
+				return ob[key];
+			}
+			
+			public function parse(val:String):void{
+				
+			}
+			
+			public function loadObject(form:Container, obj:Object):Object{
+				var tmp:String;
+				for each(var ui:Object in form.getChildren()){
+					//ignoro controles 
+					if (isHidden(ui) || (ui is Label) || (ui is Button)) continue;
+					if (hasValue(ui.id) && (ui.id.indexOf("9") < 0)){
+						if (obj.hasOwnProperty(ui.id)){
+							obj[ui.id] = getTextUI(ui);
+						}
+						else{
+							//id del control mal mapeado
+						}
+						continue;
+					}
+					if (ui is Container){
+						loadObject(ui as Container, obj);
+					}
+					else {
+						getOb(obj, ui.id);// = getTextUI(ui);
+					}
+				}
+				return null;
+			}
+			
+			public function clickLoadObj():void{
+				var ob:Object = loadObject(filterForm, new MiObj());
+			}
+			public static function isHidden(obj:Object):Boolean{
+				return (obj is UIComponent) && (!UIComponent(obj).visible);
+			}
+			
+			public static function hasValue(obj:Object):Boolean{
+				if(obj==null)return false;
+				if(obj is Array) return (obj as Array).length>0;
+				if(obj is ArrayCollection) return ArrayCollection(obj).length>0;
+				if(obj is String) return StringUtil.trim(String(obj)).length>0;
+				if(obj is TextInput)return StringUtil.trim(TextInput(obj).text).length>0;
+				if(obj is Label) return StringUtil.trim(Label(obj).text).length>0;
+				if(obj is TextArea) return (StringUtil.trim(TextArea(obj).text).length>0) || (StringUtil.trim(TextArea(obj).htmlText).length>0);
+				if(obj is ComboBox) return StringUtil.trim(ComboBox(obj).selectedLabel).length > 0;
+				return false;
+			}
+			
+			public static function getTextUI(obj:Object):String{
+				if(obj==null) return "";
+				if(obj is TextInput) return TextInput(obj).text;
+				if(obj is Container) return Container(obj).label;
+				if(obj is TextArea) return hasValue(TextArea(obj).text) ? TextArea(obj).text : TextArea(obj).htmlText;
+				if(obj is ComboBox) return ComboBox(obj).selectedLabel;
+				if(obj is Label) return Label(obj).text;
+				return "";
+			}
+			
+			public function validaFiltros(box:Container):Boolean{
+				for each(var ob:Object in box.getChildren()){
+					if (isHidden(ob) || (ob is Label) || (ob is Button)) continue;
+					if ((ob is Container)&&(validaFiltros(ob as Container))) return true;
+					if (hasValue(ob)) return true;
+				}
+				return false;
+			}
+			
+			public function validaForm(box:Container, ignoreIds:Array=null, lblerr:String=""):Object{
+				var resp:Object, tmp:String;
+				for each(var ob:Object in box.getChildren()){
+					if (hasValue(tmp = getTextUI(ob))) lblerr = tmp;
+					if (isHidden(ob) || (ob is Label) || (ob is Button)) continue;
+					if ((hasValue(ignoreIds))&&(ArrayUtil.getItemIndex(ob.id, ignoreIds) > -1)) continue;
+					if ((ob is Container)&&(!(resp = validaForm(ob as Container,ignoreIds, lblerr)).res)) return resp;
+					if ((!hasValue(ob)) && (!(ob is Container))) return { res: false, ui: lblerr};
+				}
+				return { res:true, ui: null };
+			}
+			
+			public function limpiarForm(box:Container):void{
+				for each(var control:Object in box.getChildren()){
+					if (control is Container)limpiarForm(Container(control));
+					else if (control is TextInput) TextInput(control).text = "";
+					else if (control is TextArea) TextArea(control).htmlText = TextArea(control).text = "";
+					else if (control is ComboBox) ComboBox(control).selectedItem = null;
+				}
+			}
+			
+			public function getTitleFilters(box:Container, prefijo:String="Filtros: ", res:String=""):String{
+				var _tmp:String="";
+				for each(var ob:Object in box.getChildren()){
+					if ((isHidden(ob)) || (ob is Button)) continue;
+					if (hasValue(_tmp = getTextUI(ob)) && ((ob is Label) || (ob is Container))){
+						_tmp = (_tmp.indexOf(":") < 0) ?  _tmp + ": " : _tmp;
+						res+= hasValue(res) ? ", " + _tmp : _tmp;
+						if (ob is Label) continue;
+					}
+					if (ob is Container){
+						res=getTitleFilters((ob as Container), prefijo, res);
+					}
+					else if (hasValue(_tmp)){
+						res+="'" + _tmp + "'";
+					}
+					if (res.substr(res.length-2) == ": "){
+						if (StringUtil.trim(res) == (res = res.substr(0, res.lastIndexOf(",")))){
+							res = ""
+						}
+					}
+				}
+				return ((hasValue(res)) && (res.indexOf(StringUtil.trim(prefijo)) < 0)) ? prefijo + res : res;
+			}
+			
+			private function clickValidaForm():void{
+				var ui:String;
+				if (hasValue(ui = validaForm(filterForm, ["fechaDesde","cboAccion","cboTipoExp"]).ui)){
+					Alert.show("El campo '" + ui + "' es requerido");
+				}
+				else{
+					Alert.show("Formulario completo");
+				}
+			}
+			
+			private function clickValidaFilters():void{
+				if (validaFiltros(filterForm)){
+					Alert.show("Filtro Completo");
+				}
+				else{
+					Alert.show("Ingrese un filtro de busqueda");
+				}
+			}
+			
+			
+			/* public function isHidden(obj:Object):Boolean{return (obj is UIComponent) && (!UIComponent(obj).visible);}
+			public function hasValue(obj:Object):Boolean{if(obj==null)return false;if(obj is Array) return (obj as Array).length>0;if(obj is ArrayCollection) return ArrayCollection(obj).length>0;if(obj is String) return StringUtil.trim(String(obj)).length>0;if(obj is TextInput)return StringUtil.trim(TextInput(obj).text).length>0;if(obj is Label) return StringUtil.trim(Label(obj).text).length>0;if(obj is TextArea) return (StringUtil.trim(TextArea(obj).text).length>0) || (StringUtil.trim(TextArea(obj).htmlText).length>0);if(obj is ComboBox) return StringUtil.trim(ComboBox(obj).selectedLabel).length > 0;return false;}	
+			public function getTextUI(obj:Object):String{if(obj==null) return "";if(obj is TextInput) return TextInput(obj).text;if(obj is Container) return Container(obj).label;if(obj is TextArea) return hasValue(TextArea(obj).text) ? TextArea(obj).text : TextArea(obj).htmlText;if(obj is ComboBox) return ComboBox(obj).selectedLabel;if(obj is Label) return Label(obj).text;return "";}
+			public function validaFiltros(box:Container):Boolean{for each(var ob:Object in box.getChildren()){if (isHidden(ob) || (ob is Label) || (ob is Button)) continue;if ((ob is Container)&&(validaFiltros(ob as Container))) return true;if (hasValue(ob)) return true;}return false;}
+			public function limpiarForm(box:Container):void{for each(var control:Object in box.getChildren()){if (control is Container)limpiarForm(Container(control));else if (control is TextInput) TextInput(control).text = "";else if (control is TextArea) TextArea(control).htmlText = TextArea(control).text = "";else if (control is ComboBox) ComboBox(control).selectedItem = null;}}
+			public function getTitleFilters(box:Container, prefijo:String="Filtros: ", res:String=""):String{var _tmp:String="";for each(var ob:Object in box.getChildren()){if ((isHidden(ob)) || (ob is Button)) continue;if (hasValue(_tmp = getTextUI(ob)) && ((ob is Label) || (ob is Container))){_tmp = (_tmp.indexOf(":") < 0) ?  _tmp + ": " : _tmp;res+= hasValue(res) ? ", " + _tmp : _tmp;if (ob is Label) continue;}if (ob is Container){res=getTitleFilters((ob as Container), prefijo, res);}else if (hasValue(_tmp)){res+="'" + _tmp + "'";}if (res.substr(res.length-2) == ": "){if (StringUtil.trim(res) == (res = res.substr(0, res.lastIndexOf(",")))){res = ""}}}return ((hasValue(res)) && (res.indexOf(StringUtil.trim(prefijo)) < 0)) ? prefijo + res : res;}
+ */
+		]]>
+	</mx:Script>
+	
+	<mx:Form id="filterForm" label="Búsqueda Básica" width="100%" height="100%" paddingTop="0" paddingBottom="0">
+		<mx:FormItem label="Fecha Desde">
+			<mx:HBox id="hb7">
+				<mx:TextInput id="fechaDesde"/>
+				<mx:Label text="Fecha Hasta" />
+				<mx:TextInput id="fechaHasta"/>
+			</mx:HBox>
+		</mx:FormItem>
+		
+		<mx:FormItem label="Organismo">
+			<mx:VBox>
+				<mx:ComboBox id="org_id" dataProvider="{arr}" labelField="txt"/>
+				<mx:HBox label="dddd" id="hb8">
+					<mx:TextInput id="ddd"/>
+					<mx:Label text="xxx"/>
+					<mx:TextInput id="ggg"/>
+				</mx:HBox>
+				
+			</mx:VBox>
+			
+		</mx:FormItem>
+		
+		<mx:FormItem id="itemAccion" label="Acción">
+			<mx:ComboBox id="cboAccion" dataProvider="{arr}" labelField="txt"/>
+		</mx:FormItem>
+		
+		<mx:FormItem label="Expediente">
+			<mx:HBox id="hb9">
+				<mx:ComboBox id="exp9tex9tex_id" dataProvider="{arr}" labelField="txt"/>
+				<mx:Label text="Desde"/>
+				<mx:TextInput  id="integerNumeroDesde"/>
+				<mx:Label text="/"/>
+				<mx:TextInput  id="shorAnioDesde"/>
+			</mx:HBox>
+		</mx:FormItem>
+		<mx:Label text="hasta"/>
+		<mx:TextInput  id="integerNumeroHasta"/>
+		<mx:Label text="/"/>
+		<mx:TextInput id="shorAnioHasta"/>
+		<mx:HBox>
+			<mx:Button label="Filtros" click="Alert.show(getTitleFilters(filterForm))" />
+			<mx:Button label="Limpiar" click="limpiarForm(filterForm)" />
+			<mx:Button label="Validar Todo" click="clickValidaForm()" />
+			<mx:Button label="Validar Filtros" click="clickValidaFilters()" />
+			<mx:Button label="Load Obj" click="clickLoadObj()" />
+		</mx:HBox>
+	</mx:Form>
+</mx:WindowedApplication>

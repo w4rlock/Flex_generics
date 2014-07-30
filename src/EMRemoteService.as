@@ -9,6 +9,7 @@ package com.em.presentation.common.util
 	import mx.rpc.events.FaultEvent;
 	import mx.rpc.events.ResultEvent;
 	import mx.rpc.remoting.mxml.RemoteObject;
+	import mx.utils.StringUtil;
 
 	public class EMRemoteService
 	{
@@ -81,11 +82,13 @@ package com.em.presentation.common.util
 		public function getReport(reportName:String="Reporte.pdf", onResult:Function=null, onError:Function=null):void{
 			this.addListener(
 				function(res:String):void{
-					var vars:String = TramixRemoteFile.PARAM_COMMAND + "=" + TramixRemoteFile.COM_DOWNLOAD +
-					"&" + TramixRemoteFile.PARAM_ICOMMAND + "=" + TramixRemoteFile.ICOM_GET_REP +
-					"&" + TramixRemoteFile.PARAM_FILE + "=" + res.substr(res.lastIndexOf("/") + 1) +
-					"&" + TramixRemoteFile.PARAM_OP + "=" + reportName;
-					EMUtilTramix.navigateTo(TramixRemoteFile.DOWNLOAD_URL, vars);
+					if ((res != null) && (StringUtil.trim(res).length > 0)){
+						var vars:String = TramixRemoteFile.PARAM_COMMAND + "=" + TramixRemoteFile.COM_DOWNLOAD +
+						"&" + TramixRemoteFile.PARAM_ICOMMAND + "=" + TramixRemoteFile.ICOM_GET_REP +
+						"&" + TramixRemoteFile.PARAM_FILE + "=" + res.substr(res.lastIndexOf("/") + 1) +
+						"&" + TramixRemoteFile.PARAM_OP + "=" + reportName;
+						EMUtilTramix.navigateTo(TramixRemoteFile.DOWNLOAD_URL, vars);
+					}
 					if (onResult != null){ onResult(res); }
 				}, 
 				onError
